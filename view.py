@@ -58,7 +58,24 @@ def band_filter(data, cutoff_low, cutoff_high, fs, order):
 
 
 
+def normalize(x):
+    return (2 * (x-np.min(x))/(np.max(x)-np.min(x))) - 1.0
 
+def mark_pre_speech_section(audio_data: np.array) -> np.array:
+    audio_rms = rms(y=audio_data, hop_length=1, frame_length=16)[0]
+
+    result = []
+    end = False
+    for i in audio_rms:
+        if i > 0.3:
+            end = True
+        if not end:
+            result.append(1)
+        else:
+            result.append(0)
+            
+
+    return np.array(result)
 
 if __name__ == "__main__":
     
@@ -75,6 +92,7 @@ if __name__ == "__main__":
         eeg_data_covert, audio_data = get_data(subject="sub-05", speech_type="covert", epoch=epoch, eeg_nodes=EEG_NODES,target=TARGET)
         eeg_data_overt, audio_data = get_data(subject="sub-05", speech_type="overt", epoch=epoch, eeg_nodes=EEG_NODES, target=TARGET)
 
+        audio_data = normalize(audio_data)
 
         fig, (ax1, ax2, ax3) = plt.subplots(3)
 
@@ -93,11 +111,14 @@ if __name__ == "__main__":
         ax2.set_title("Overt")
         
         ax3.plot(audio_data)
-        audio_rms = rms(y=audio_data, hop_length=1, frame_length=16)[0]
-        ax3.plot(audio_rms)
-        print(audio_rms)
-        ax3.legend(["Waveform", "RMS"])
+
+
+        
+        prespeech_marking = mark_pre_speech_section(audio_data)
+        ax3.plot(prespeech_marking)
+
+        ax3.legend(["Waveform", "Marker"])
 
         plt.show()
 
-        exit()
+        # exit()
