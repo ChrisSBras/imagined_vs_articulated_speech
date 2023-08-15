@@ -18,7 +18,7 @@ from helpers.data import get_data, DataException
 from helpers.model import create_save_callback
 
 
-TIME_STEPS = 32
+TIME_STEPS = 128
 
 def generate_data_line(xs, ys, length=2048, window=1, features=1):
     x_out = []
@@ -80,6 +80,7 @@ def generate_model(features=16, batch_size=16):
     # model.add(LSTM(units=HIDDEN_SIZE))
     model.add(Dense(1, activation=None))
 
+    cce = tf.keras.losses.CategoricalCrossentropy()
     model.compile(tf.optimizers.Adam(), loss='mse', run_eagerly=False)
     return model
 
@@ -98,14 +99,14 @@ if __name__ == "__main__":
     females = [1, 3, 4, 5, 6, 7, 8, 9, 10, 14, 16, 17, 18, 19]
     noise = [9, 13, 7, 17, 2]
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=1, test_split=0.2)
+    # with warnings.catch_warnings():
+    #     warnings.simplefilter("ignore")
+    #     train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=1, test_split=0.2)
 
-    np.save("train_x_prespeech", train_x)
-    np.save("train_y_prespeech", train_y)
-    np.save("test_x_prespeech", test_x)
-    np.save("test_y_prespeech", test_y)
+    # np.save("train_x_prespeech", train_x)
+    # np.save("train_y_prespeech", train_y)
+    # np.save("test_x_prespeech", test_x)
+    # np.save("test_y_prespeech", test_y)
 
     train_x = np.load("train_x_prespeech.npy")
     train_y = np.load("train_y_prespeech.npy")
@@ -132,10 +133,13 @@ if __name__ == "__main__":
     model = generate_model(features=features, batch_size=BATCH_SIZE)
     model.summary()
 
-    save_callback = create_save_callback("prespeech_save", "loss", "min")
-    # model.fit(train_x_flat[:30000], train_y_flat[:30000], epochs=EPOCHS, shuffle=True, batch_size=BATCH_SIZE, callbacks=[save_callback])
-
     model = load_model("prespeech_save.h5")
+    save_callback = create_save_callback("prespeech_save", "loss", "min")
+    model.fit(train_x_flat[:30000], train_y_flat[:30000], epochs=EPOCHS, shuffle=True, batch_size=BATCH_SIZE, callbacks=[save_callback])
+
+    # model = load_model("prespeech_save.h5")
+
+    model.save("prespeech.h5")
 
     test_x_flat = []
     test_y_flat = []
@@ -151,11 +155,9 @@ if __name__ == "__main__":
     test_y_flat = np.array(test_y_flat)
 
 
-    y_hat = model.predict(test_x_flat[:2048], verbose=1, batch_size=BATCH_SIZE)
-    target_signal = test_y_flat[TIME_STEPS:2048]
+    y_hat = model.predict(test_x_flat[:2048 * 3], verbose=1, batch_size=BATCH_SIZE)
+    target_signal = test_y_flat[:2048 * 3]
 
-    print(np.where(target_signal < 1))
-    
     output_signal_normal = np.array([y[0] for y in y_hat])
     plt.plot(output_signal_normal)
     plt.plot(target_signal)
