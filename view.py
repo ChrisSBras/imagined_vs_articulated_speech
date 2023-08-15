@@ -1,81 +1,9 @@
-from mne.io import read_epochs_eeglab
+
 import matplotlib.pyplot as plt
-from scipy.io import wavfile
-import numpy as np
-from librosa import resample
-from librosa.feature import rms
 
-from scipy.signal import butter,filtfilt
-
-
-def moving_average(a, n=200):
-    ret = np.cumsum(a, dtype=float)
-    ret[n:] = ret[n:] - ret[:-n]
-    return ret[n - 1:]
-
-
-def get_data(subject="sub-01", speech_type="covert", target="ee", epoch=0, eeg_nodes=[]):
-    eeg_data = read_epochs_eeglab(f"./data/derivatives/{subject}/eeg/{subject}_task-{speech_type}-{target}_eeg.set", verbose=False)
-    df = eeg_data.to_data_frame()
-    epoch_df = df[df["epoch"] == epoch]
-
-    if "FC2" in epoch_df.keys():
-        filtered_df = epoch_df.drop(["time", "condition", "epoch", 'FC2'], axis=1)
-    else:
-        filtered_df = epoch_df.drop(["time", "condition", "epoch"], axis=1)
-
-    filtered_df = epoch_df[eeg_nodes]
-
-    numpy_df = filtered_df.to_numpy()
-
-    # get the audio data
-    rate, audio_data = wavfile.read(f"./data/sourcedata/{subject}/audio/{subject}_task-overt-{target}_run-{(epoch + 1):02d}_audio.wav")
-    
-    audio_data =  resample(audio_data / 2**31 , orig_sr=rate, target_sr=1024.0)
-
-    return numpy_df, audio_data
-
-def butter_lowpass_filter(data, cutoff, fs, order):
-    nyq = fs / 2
-    normal_cutoff = cutoff / nyq
-    # Get the filter coefficients 
-    b, a = butter(order, normal_cutoff, btype='low', analog=False)
-    y = filtfilt(b, a, data)
-    return y
-
-def butter_highpass_filter(data, cutoff, fs, order):
-    nyq = fs / 2
-    normal_cutoff = cutoff / nyq
-    # Get the filter coefficients 
-    b, a = butter(order, normal_cutoff, btype='high', analog=False)
-    y = filtfilt(b, a, data)
-    return y
-
-def band_filter(data, cutoff_low, cutoff_high, fs, order):
-    data = butter_lowpass_filter(data, cutoff_high, fs, order)
-    data = butter_highpass_filter(data, cutoff_low, fs, order)
-    return data
-
-
-
-def normalize(x):
-    return (2 * (x-np.min(x))/(np.max(x)-np.min(x))) - 1.0
-
-def mark_pre_speech_section(audio_data: np.array) -> np.array:
-    audio_rms = rms(y=audio_data, hop_length=1, frame_length=16)[0]
-
-    result = []
-    end = False
-    for i in audio_rms:
-        if i > 0.3:
-            end = True
-        if not end:
-            result.append(1)
-        else:
-            result.append(0)
-            
-
-    return np.array(result)
+from helpers.processing import moving_average, normalize
+from helpers.preprocessing import mark_pre_speech_section
+from helpers.data import get_data
 
 if __name__ == "__main__":
     
@@ -86,7 +14,6 @@ if __name__ == "__main__":
     cutoff_high = 12.0
 
     TARGET = "aa"
-
 
     for epoch in range(0, 20):
         eeg_data_covert, audio_data = get_data(subject="sub-05", speech_type="covert", epoch=epoch, eeg_nodes=EEG_NODES,target=TARGET)
