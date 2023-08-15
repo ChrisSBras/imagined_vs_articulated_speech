@@ -113,7 +113,7 @@ def visual_validation(model, speech_type: str, eeg_nodes: list[str], targets: li
                     output_signal_normal = np.clip(output_signal_normal, 0, 1)
 
 
-                    fig, (ax1) = plt.subplots(1)
+                    fig, (ax1, ax2) = plt.subplots(2)
                     fig.set_size_inches(16, 10)
 
                     ax1.plot(audio_data)
@@ -122,7 +122,23 @@ def visual_validation(model, speech_type: str, eeg_nodes: list[str], targets: li
 
                     ax1.plot()
                     ax1.legend(["Audio", "True Marking", "Predicted Marking"])
-                    ax1.set_title(f"{subject} {target} {epoch}")
+                    ax1.set_title(f"{subject} {target} {epoch} Audio")
+
+                    eeg_max = np.max(np.abs(eeg_data.T))
+                    for i, data in enumerate(eeg_data.T):
+                        val = np.max(moving_average(data))
+                        if val > eeg_max:
+                            eeg_max = val
+
+                    ax2.plot(audio_marking * eeg_max)
+                    ax2.plot(output_signal_normal * eeg_max)
+                    for i, data in enumerate(eeg_data.T):
+                        ax2.plot(moving_average(data))
+
+                    ax2.plot()
+                    ax2.legend(["True Marking", "Predicted Marking"])
+                    ax2.set_title(f"{subject} {target} {epoch} Audio")
+
                     plt.show()
 
                 else:
@@ -157,7 +173,6 @@ if __name__ == "__main__":
     test_y = np.load("test_y_prespeech.npy")
 
    
-
     train_x_flat = []
     train_y_flat = []
     for i in train_x:
