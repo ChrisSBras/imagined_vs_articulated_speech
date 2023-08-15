@@ -16,6 +16,7 @@ import keras.backend as K
 from helpers.preprocessing import mark_pre_speech_section
 from helpers.data import get_data, DataException
 from helpers.model import create_save_callback
+from helpers.processing import moving_average, butter_lowpass_filter
 
 
 TIME_STEPS = 128
@@ -85,6 +86,47 @@ def generate_model(features=16, batch_size=16):
     return model
 
 
+def visual_validation(model, speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2):
+    for i, target in enumerate(targets):
+
+        for j in range(1, num_subjects + 1): # 20 subjects in total
+            
+            if j in excluded_subjects: # skip excluded subjects
+                continue
+
+            subject = f"sub-{j:02}"
+            test_array = random.sample(range(epochs), round(test_split * epochs) )
+            print(f"Using epochs as test for subject {subject} target {target}: ", test_array)
+
+            for epoch in range(epochs):
+                if epoch in test_array:
+                    eeg_data, audio_data = get_data(subject=subject, speech_type=speech_type, target=target, eeg_nodes=eeg_nodes, epoch=epoch)
+                    audio_marking = mark_pre_speech_section(audio_data)
+
+                    x_data, _ = generate_data_line(eeg_data, audio_marking, features=eeg_data.shape[1])
+                    y_hat = model.predict(x_data, verbose=1, batch_size=BATCH_SIZE)
+
+                    output_signal_normal = np.array([y[0] for y in y_hat])
+                    
+                    # post process model output
+                    output_signal_normal = butter_lowpass_filter(output_signal_normal, 2, 1024, 4) * 2
+                    output_signal_normal = np.clip(output_signal_normal, 0, 1)
+
+
+                    fig, (ax1) = plt.subplots(1)
+                    fig.set_size_inches(16, 10)
+
+                    ax1.plot(audio_data)
+                    ax1.plot(audio_marking)
+                    ax1.plot(output_signal_normal)
+
+                    ax1.plot()
+                    ax1.legend(["Audio", "True Marking", "Predicted Marking"])
+                    ax1.set_title(f"{subject} {target} {epoch}")
+                    plt.show()
+
+                else:
+                    continue
 
 if __name__ == "__main__":
 
@@ -135,7 +177,7 @@ if __name__ == "__main__":
 
     model = load_model("prespeech_save.h5")
     save_callback = create_save_callback("prespeech_save", "loss", "min")
-    model.fit(train_x_flat[:30000], train_y_flat[:30000], epochs=EPOCHS, shuffle=True, batch_size=BATCH_SIZE, callbacks=[save_callback])
+    # model.fit(train_x_flat[:30000], train_y_flat[:30000], epochs=EPOCHS, shuffle=True, batch_size=BATCH_SIZE, callbacks=[save_callback])
 
     # model = load_model("prespeech_save.h5")
 
@@ -149,17 +191,29 @@ if __name__ == "__main__":
     for i in train_y:
         test_y_flat.extend(i)
 
-    print(np.where(train_y[:, 0] < 1))
-
     test_x_flat = np.array(test_x_flat)
     test_y_flat = np.array(test_y_flat)
 
+    visual_validation(model, SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=1, test_split=0.2)
 
-    y_hat = model.predict(test_x_flat[:2048 * 3], verbose=1, batch_size=BATCH_SIZE)
-    target_signal = test_y_flat[:2048 * 3]
+    y_hat = model.predict(test_x_flat[:2048 * 10], verbose=1, batch_size=BATCH_SIZE)
+    target_signal = test_y_flat[:2048 * 10]
 
     output_signal_normal = np.array([y[0] for y in y_hat])
-    plt.plot(output_signal_normal)
-    plt.plot(target_signal)
-    plt.legend(["Prediction", "Target"])
+
+    #cleanup signal
+   
+    output_signal_normal = butter_lowpass_filter(output_signal_normal, 2, 1024, 4) * 2
+    output_signal_normal = np.clip(output_signal_normal, 0, 1)
+
+    # output_signal_normal[np.where(output_signal_normal >= 0.5)] = 1
+    # output_signal_normal[np.where(output_signal_normal < 0.5)] = 0
+
+    fig, (ax1) = plt.subplots(1)
+
+    fig.set_size_inches(16, 10)
+
+    ax1.plot(output_signal_normal)
+    ax1.plot(target_signal)
+    ax1.legend(["Prediction", "Target"])
     plt.show()
