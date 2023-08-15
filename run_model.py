@@ -18,18 +18,14 @@ from pyts.classification import KNeighborsClassifier
 
 from librosa import resample
 
-def moving_average(a, n=200):
-    ret = np.cumsum(a, dtype=float)
-    ret[n:] = ret[n:] - ret[:-n]
-    return ret[n - 1:]
-
-
 import tensorflow as tf
 
 from keras.models import Sequential, load_model
 from keras.layers import LSTM, Dense, Conv1D, Dropout
 from keras import regularizers
 import keras.layers
+
+from helpers.processing import normalize
 
 import random
 
@@ -42,7 +38,6 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
     test_xs = []
     test_ys = []
     
-
     for i, target in enumerate(targets):
 
         for j in range(1, num_subjects + 1): # 20 subjects in total
