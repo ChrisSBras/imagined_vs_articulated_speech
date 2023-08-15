@@ -19,7 +19,7 @@ def get_data(subject="sub-01", speech_type="covert", target="ee", epoch=0, eeg_n
     else:
         filtered_df = epoch_df.drop(["time", "condition", "epoch"], axis=1)
 
-    filtered_df = epoch_df[eeg_nodes]
+    # filtered_df = epoch_df[eeg_nodes]
 
     numpy_df = filtered_df.to_numpy()
 

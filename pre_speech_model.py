@@ -137,7 +137,7 @@ def visual_validation(model, speech_type: str, eeg_nodes: list[str], targets: li
 
                     ax2.plot()
                     ax2.legend(["True Marking", "Predicted Marking"])
-                    ax2.set_title(f"{subject} {target} {epoch} Audio")
+                    ax2.set_title(f"{subject} {target} {epoch} EEG")
 
                     plt.show()
 
@@ -190,13 +190,13 @@ if __name__ == "__main__":
     model = generate_model(features=features, batch_size=BATCH_SIZE)
     model.summary()
 
-    model = load_model("prespeech_save.h5")
-    save_callback = create_save_callback("prespeech_save", "loss", "min")
+    model = load_model("prespeech_save_all_nodes.h5")
+    save_callback = create_save_callback("prespeech_save_all_nodes", "loss", "min")
     # model.fit(train_x_flat[:30000], train_y_flat[:30000], epochs=EPOCHS, shuffle=True, batch_size=BATCH_SIZE, callbacks=[save_callback])
 
     # model = load_model("prespeech_save.h5")
 
-    model.save("prespeech.h5")
+    model.save("prespeech_all_nodes.h5")
 
     test_x_flat = []
     test_y_flat = []
