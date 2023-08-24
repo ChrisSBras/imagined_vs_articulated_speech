@@ -34,24 +34,25 @@ def get_data(subject="sub-01", speech_type="covert", target="ee", epoch=0, eeg_n
     rate, audio_data = wavfile.read(audio_path)
     markings = get_speech_marking_for_file(audio_path)
 
-
-
     if resampleRate:
         audio_data =  resample(audio_data / 2**31 , orig_sr=rate, target_sr=resampleRate)
         # create marking array in resampled samplerate
-        start_speech = markings[0]['start'] / VAD_SAMPLING_RATE * resampleRate
-        start_speech = int(start_speech)
         audio_marking = np.zeros_like(audio_data)
-        audio_marking[:start_speech] = 1
-  
+        if markings:
+            start_speech = markings[0]['start'] / VAD_SAMPLING_RATE * resampleRate
+            start_speech = int(start_speech)
 
+            audio_marking[:start_speech] = 1
+  
     else:
         # create resampled marking in audio native rate
-        start_speech = markings[0]['start'] / VAD_SAMPLING_RATE * rate
-        start_speech = int(start_speech)
-
         audio_marking = np.zeros_like(audio_data)
-        audio_marking[:start_speech] = 1
+        if markings:
+            start_speech = markings[0]['start'] / VAD_SAMPLING_RATE * rate
+            start_speech = int(start_speech)
+
+
+            audio_marking[:start_speech] = 1
 
     audio_data = normalize(audio_data)
     return numpy_df, audio_data, audio_marking

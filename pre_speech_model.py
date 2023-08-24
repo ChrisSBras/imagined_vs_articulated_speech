@@ -52,12 +52,10 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
 
             for epoch in range(epochs):
                 try:
-                    eeg_data, audio_data = get_data(subject=subject, speech_type=speech_type, target=target, eeg_nodes=eeg_nodes, epoch=epoch)
+                    eeg_data, audio_data, audio_marking = get_data(subject=subject, speech_type=speech_type, target=target, eeg_nodes=eeg_nodes, epoch=epoch)
                 except DataException as e:
                     print(e)
                     continue
-                
-                audio_marking = mark_pre_speech_section(audio_data)
 
                 x_data, y_data = generate_data_line(eeg_data, audio_marking, features=eeg_data.shape[1])
 
@@ -100,10 +98,12 @@ def visual_validation(model, speech_type: str, eeg_nodes: list[str], targets: li
 
             for epoch in range(epochs):
                 if epoch in test_array:
-                    eeg_data, audio_data = get_data(subject=subject, speech_type=speech_type, target=target, eeg_nodes=eeg_nodes, epoch=epoch)
-                    audio_marking = mark_pre_speech_section(audio_data)
+                    eeg_data, audio_data, audio_marking = get_data(subject=subject, speech_type=speech_type, target=target, eeg_nodes=eeg_nodes, epoch=epoch)
 
-                    x_data, _ = generate_data_line(eeg_data, audio_marking, features=eeg_data.shape[1])
+                    zeros_eeg = np.zeros((TIME_STEPS, eeg_data.shape[1]))
+                    zeros_marking =  np.zeros((TIME_STEPS))
+
+                    x_data, _ = generate_data_line(np.vstack((zeros_eeg, eeg_data)), np.hstack((zeros_marking, audio_marking)), features=eeg_data.shape[1])
                     y_hat = model.predict(x_data, verbose=1, batch_size=BATCH_SIZE)
 
                     output_signal_normal = np.array([y[0] for y in y_hat])
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     model.summary()
 
     model = load_model("prespeech_save_all_nodes.h5")
-    save_callback = create_save_callback("prespeech_save_all_nodes", "loss", "min")
+    # save_callback = create_save_callback("prespeech_save_all_nodes", "loss", "min")
     # model.fit(train_x_flat[:30000], train_y_flat[:30000], epochs=EPOCHS, shuffle=True, batch_size=BATCH_SIZE, callbacks=[save_callback])
 
     # model = load_model("prespeech_save.h5")
