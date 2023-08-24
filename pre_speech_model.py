@@ -109,8 +109,8 @@ def visual_validation(model, speech_type: str, eeg_nodes: list[str], targets: li
                     output_signal_normal = np.array([y[0] for y in y_hat])
                     
                     # post process model output
-                    output_signal_normal = butter_lowpass_filter(output_signal_normal, 2, 1024, 4) * 2
-                    output_signal_normal = np.clip(output_signal_normal, 0, 1)
+                    # output_signal_normal = butter_lowpass_filter(output_signal_normal, 2, 1024, 4) * 2
+                    # output_signal_normal = np.clip(output_signal_normal, 0, 1)
 
 
                     fig, (ax1, ax2) = plt.subplots(2)

@@ -16,8 +16,8 @@ if __name__ == "__main__":
     TARGET = "aa"
 
     for epoch in range(0, 20):
-        eeg_data_covert, audio_data = get_data(subject="sub-05", speech_type="covert", epoch=epoch, eeg_nodes=EEG_NODES,target=TARGET)
-        eeg_data_overt, audio_data = get_data(subject="sub-05", speech_type="overt", epoch=epoch, eeg_nodes=EEG_NODES, target=TARGET)
+        eeg_data_covert, audio_data, prespeech_marking = get_data(subject="sub-05", speech_type="covert", epoch=epoch, eeg_nodes=EEG_NODES,target=TARGET)
+        eeg_data_overt, audio_data, prespeech_marking = get_data(subject="sub-05", speech_type="overt", epoch=epoch, eeg_nodes=EEG_NODES, target=TARGET)
 
         audio_data = normalize(audio_data)
 
@@ -39,9 +39,6 @@ if __name__ == "__main__":
         
         ax3.plot(audio_data)
 
-
-        
-        prespeech_marking = mark_pre_speech_section(audio_data)
         ax3.plot(prespeech_marking)
 
         ax3.legend(["Waveform", "Marker"])
