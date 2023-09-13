@@ -28,7 +28,7 @@ import keras.layers
 from sklearn.inspection import permutation_importance
 
 from helpers.processing import normalize
-from helpers.filtering import filter_data
+from helpers.filtering import filter_data, rereference
 
 import random
 
@@ -65,11 +65,14 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
                 else:
                      filtered_df = epoch_df.drop(["time", "condition", "epoch"], axis=1)
 
-                # filtered_df = epoch_df[eeg_nodes]
+                filtered_df = epoch_df[eeg_nodes]
                 numpy_df = filtered_df.to_numpy()
+      
 
                 if numpy_df.shape[0] != 2048:
                     continue # skip epochs that are not exactly right for now
+                
+                numpy_df = rereference(numpy_df)
 
                 if use_filter:
                     numpy_df = filter_data(numpy_df)
@@ -155,19 +158,10 @@ def make_model(input_shape=(2048, 61), num_y=5):
     model = keras.models.Model(inputs=input_layer, outputs=output_layer)
 
     cce = tf.keras.losses.CategoricalCrossentropy()
-    poisson = tf.keras.losses.Poisson()
 
-    model.compile(tf.optimizers.Adam(1e-2), loss=poisson, run_eagerly=False,  metrics=["accuracy"])
+    model.compile(tf.optimizers.Adam(1e-2), loss=cce, run_eagerly=False,  metrics=["accuracy"])
 
     return model 
-
-# def filter_data(data):
-#     order = 6
-#     fs = 1024.0      # sample rate, Hz
-#     cutoff = 100 # desired cutoff frequency of the filter, Hz
-
-#     # Get the filter coefficients so we can check its frequency response.
-#     b, a = butter_lowpass(cutoff, fs, order)
 
 if __name__ == "__main__":
  
@@ -184,7 +178,7 @@ if __name__ == "__main__":
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES_IOANNIS, TARGETS, excluded_subjects=noise, num_subjects=20, test_split=0.15, use_filter=False)
+        train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=20, test_split=0.15, use_filter=True)
 
     np.save("train_x", train_x)
     np.save("train_y", train_y)
