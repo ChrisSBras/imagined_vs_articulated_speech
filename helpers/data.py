@@ -5,6 +5,7 @@ import numpy as np
 
 from helpers.processing import normalize
 from helpers.vad import get_speech_marking_for_file, VAD_SAMPLING_RATE
+from helpers.filtering import filter_data
 
 DATA_LEN = 2048
 
@@ -12,7 +13,7 @@ class DataException(Exception):
     pass
 
 
-def get_data(subject="sub-01", speech_type="covert", target="ee", epoch=0, eeg_nodes=[], resampleRate=1024.0):
+def get_data(subject="sub-01", speech_type="covert", target="ee", epoch=0, eeg_nodes=[], resampleRate=1024.0, use_filter=False):
     eeg_data = read_epochs_eeglab(f"./data/derivatives/{subject}/eeg/{subject}_task-{speech_type}-{target}_eeg.set", verbose=False)
     df = eeg_data.to_data_frame()
     epoch_df = df[df["epoch"] == epoch]
@@ -25,6 +26,8 @@ def get_data(subject="sub-01", speech_type="covert", target="ee", epoch=0, eeg_n
     # filtered_df = epoch_df[eeg_nodes]
 
     numpy_df = filtered_df.to_numpy()
+    if use_filter:
+        numpy_df = filter_data(numpy_df)
 
     if numpy_df.shape[0] != DATA_LEN:
         raise DataException(f"Invalid data size! Found length of {numpy_df.shape[0]} instead of required {DATA_LEN}")

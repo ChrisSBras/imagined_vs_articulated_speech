@@ -1,4 +1,5 @@
 from mne.io import read_raw_eeglab, read_epochs_eeglab, RawArray
+from mne import grand_average
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import butter, lfilter, freqz
@@ -24,14 +25,16 @@ from keras.models import Sequential, load_model
 from keras.layers import LSTM, Dense, Conv1D, Dropout
 from keras import regularizers
 import keras.layers
+from sklearn.inspection import permutation_importance
 
 from helpers.processing import normalize
+from helpers.filtering import filter_data
 
 import random
 
 random.seed(69)
 
-def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2):
+def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=False):
     xs = []
     ys = []
 
@@ -67,6 +70,9 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
 
                 if numpy_df.shape[0] != 2048:
                     continue # skip epochs that are not exactly right for now
+
+                if use_filter:
+                    numpy_df = filter_data(numpy_df)
                 
                 # new_array = []
                         
@@ -122,10 +128,10 @@ def normalize_coeffs(data):
 
     return mean, std
 
-def make_model(input_shape=(2048, 61)):
+def make_model(input_shape=(2048, 61), num_y=5):
     input_layer = keras.layers.Input(input_shape)
 
-    filter_size = 64
+    filter_size = 32
     kernel_size = 3
 
     conv1 = keras.layers.Conv1D(filters=filter_size, kernel_size=kernel_size, padding="same")(input_layer)
@@ -145,12 +151,13 @@ def make_model(input_shape=(2048, 61)):
 
     gap = keras.layers.GlobalAveragePooling1D()(conv3)
 
-    output_layer = keras.layers.Dense(5, activation="softmax")(gap)
+    output_layer = keras.layers.Dense(num_y, activation="softmax")(gap)
     model = keras.models.Model(inputs=input_layer, outputs=output_layer)
 
     cce = tf.keras.losses.CategoricalCrossentropy()
+    poisson = tf.keras.losses.Poisson()
 
-    model.compile(tf.optimizers.Adam(1e-2), loss=cce, run_eagerly=False,  metrics=["accuracy"])
+    model.compile(tf.optimizers.Adam(1e-2), loss=poisson, run_eagerly=False,  metrics=["accuracy"])
 
     return model 
 
@@ -165,22 +172,24 @@ def make_model(input_shape=(2048, 61)):
 if __name__ == "__main__":
  
     TARGETS = ["aa", "oo", "ee", "ie", "oe"]
+    # TARGETS = ["aa", "oo", "ee"]
     EEG_NODES = ["Fz", "C3", "Cz", "C4", "Pz", "PO7", "Oz", "PO8"]
     EEG_NODES2 = ["F7", "F5", "FT7", "FC5", "FC3", "FC1", "T7", "C5", "C3", "Cz", "C4", "TP7", "CP5", "CP3", "P5", "P3"]
+    EEG_NODES_IOANNIS = ["F3", "F4", "C3", "C4", "P3", "P4"]
     SPEECH_TYPE = "overt"
 
     females = [1, 3, 4, 5, 6, 7, 8, 9, 10, 14, 16, 17, 18, 19]
     noise = [9, 13, 7, 17, 2]
     
 
-    # with warnings.catch_warnings():
-    #     warnings.simplefilter("ignore")
-    #     train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=20, test_split=0.2)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES_IOANNIS, TARGETS, excluded_subjects=noise, num_subjects=20, test_split=0.15, use_filter=False)
 
-    # np.save("train_x", train_x)
-    # np.save("train_y", train_y)
-    # np.save("test_x", test_x)
-    # np.save("test_y", test_y)
+    np.save("train_x", train_x)
+    np.save("train_y", train_y)
+    np.save("test_x", test_x)
+    np.save("test_y", test_y)
 
 
     train_x = np.load("train_x.npy")
@@ -191,7 +200,7 @@ if __name__ == "__main__":
 
     print(test_y)
 
-    print(test_x.shape, train_x.shape)
+    print(test_x.shape, test_y.shape)
     
     # mu, std = normalize_coeffs(np.vstack((train_x, test_x)))
 
@@ -209,23 +218,40 @@ if __name__ == "__main__":
 
     # svc.fit(train_x, train_y.flatten())
 
-    # model = load_model("model.h5")
+    model = load_model("model.h5")
 
-    model = make_model()
-    model.fit(train_x, train_y, verbose=1, epochs=100, shuffle=True, batch_size=64,callbacks=[model_checkpoint_callback], validation_data=(test_x, test_y))
+    print(train_x.shape)
+
+    model = make_model(input_shape=(2048, train_x.shape[2]), num_y=train_y.shape[-1])
+    model.summary()
+    model.fit(train_x, train_y, verbose=2, epochs=150, shuffle=True, batch_size=64,callbacks=[model_checkpoint_callback], validation_data=(test_x, test_y))
     model.save("model.h5")
 
     model = load_model("model_save.h5")
-    # model.save("model_26percent.h")
-
-    results = model.predict(test_x)
+    # model.save("model_49.h")
 
 
-    # score = accuracy_score(test_y, results)
-    # print(score)
+
+    test_loss, test_acc = model.evaluate(test_x, test_y)
+
+    print(test_loss, test_acc)
+
+    # # Calculate the feature importance scores
+    # results = permutation_importance(model, test_x, test_y, n_repeats=10, random_state=42)
+    # importance = results.importances_mean
+
+    # # Print the feature importance scores
+    # for i,v in enumerate(importance):
+    #     print('Feature %d: %.5f' % (i,v))
+
+    # # Plot the feature importance chart
+    # plt.bar([x for x in range(len(importance))], importance)
+    # plt.show()
 
     # exit()
 
+
+    results = model.predict(test_x)
     total = 0
     right = 0
     wrong = 0

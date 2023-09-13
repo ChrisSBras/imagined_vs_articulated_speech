@@ -2,7 +2,7 @@ from scipy.signal import butter, sosfilt
 import numpy as np
 import matplotlib.pyplot as plt
 
-def filter_data(data: np.array, f1=1, f2=40, fs=1024) -> np.array:
+def filter_data(data: np.array, f1=1, f2=5, fs=1024) -> np.array:
 
     to_return = []
 

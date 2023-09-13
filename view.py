@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from helpers.processing import moving_average, normalize
 from helpers.preprocessing import mark_pre_speech_section
 from helpers.data import get_data
+from helpers.filtering import filter_data
 
 if __name__ == "__main__":
     
@@ -16,8 +17,8 @@ if __name__ == "__main__":
     TARGET = "aa"
 
     for epoch in range(0, 20):
-        eeg_data_covert, audio_data, prespeech_marking = get_data(subject="sub-05", speech_type="covert", epoch=epoch, eeg_nodes=EEG_NODES,target=TARGET)
-        eeg_data_overt, audio_data, prespeech_marking = get_data(subject="sub-05", speech_type="overt", epoch=epoch, eeg_nodes=EEG_NODES, target=TARGET)
+        eeg_data_covert, audio_data, prespeech_marking = get_data(subject="sub-01", speech_type="covert", epoch=epoch, eeg_nodes=EEG_NODES,target=TARGET, use_filter=True )
+        eeg_data_overt, audio_data, prespeech_marking = get_data(subject="sub-01", speech_type="overt", epoch=epoch, eeg_nodes=EEG_NODES, target=TARGET, use_filter=True)
 
         audio_data = normalize(audio_data)
 
@@ -27,9 +28,13 @@ if __name__ == "__main__":
         
         for i, data in enumerate(eeg_data_covert.T):
             # ax1.plot(band_filter(i, cutoff_low, cutoff_high, fs, 2))
-            # ax1.plot(i)
-            ax1.plot(moving_average(data))
-            ax2.plot(moving_average(eeg_data_overt.T[i]))
+            # ax1.plot(i
+
+            data_covert = data
+            data_overt = eeg_data_overt.T[i]
+
+            ax1.plot(data_covert)
+            ax2.plot(data_overt)
 
         ax1.legend(EEG_NODES)
         ax2.legend(EEG_NODES)

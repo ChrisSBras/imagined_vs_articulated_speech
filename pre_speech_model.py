@@ -1,15 +1,21 @@
 import warnings
+import os
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1" 
 import random
 random.seed(69)
 
 import numpy as np
 import matplotlib.pyplot as plt
 from keras.models import Sequential, load_model
-from keras.layers import LSTM, Dense, Conv1D
+from keras.layers import LSTM, Dense, Conv1D, Dropout
 from tensorflow.keras.utils import Sequence
 import tensorflow as tf
 
-HIDDEN_SIZE = 56
+from keras import regularizers
+import keras.layers
+
+HIDDEN_SIZE = 32
 
 import keras.backend as K
 
@@ -18,8 +24,9 @@ from helpers.data import get_data, DataException
 from helpers.model import create_save_callback
 from helpers.processing import moving_average, butter_lowpass_filter
 
+tf.config.threading.set_inter_op_parallelism_threads(32)
 
-TIME_STEPS = 128
+TIME_STEPS = 256
 
 def generate_data_line(xs, ys, length=2048, window=1, features=1):
     x_out = []
@@ -38,6 +45,8 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
 
     test_xs = []
     test_ys = []
+
+    test_epochs = []
     
     for i, target in enumerate(targets):
 
@@ -48,6 +57,7 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
 
             subject = f"sub-{j:02}"
             test_array = random.sample(range(epochs), round(test_split * epochs) )
+            test_epochs.append(np.array(test_array))
             print(f"Using epochs as test for subject {subject} target {target}: ", test_array)
 
             for epoch in range(epochs):
@@ -66,7 +76,7 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
                     xs.append(x_data)
                     ys.append(y_data)
 
-    return np.array(xs), np.array(ys), np.array(test_xs), np.array(test_ys)
+    return np.array(xs), np.array(ys), np.array(test_xs), np.array(test_ys), np.array(test_epochs)
 
 
 def generate_model(features=16, batch_size=16):
@@ -83,8 +93,39 @@ def generate_model(features=16, batch_size=16):
     model.compile(tf.optimizers.Adam(), loss='mse', run_eagerly=False)
     return model
 
+def generate_conv_model(features=16, batch_size=16):
+    input_shape = (TIME_STEPS, features)
+    input_layer = keras.layers.Input(input_shape)
 
-def visual_validation(model, speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2):
+    filter_size = 64
+    kernel_size = 3
+
+    conv1 = keras.layers.Conv1D(filters=filter_size, kernel_size=kernel_size, padding="same")(input_layer)
+    conv1 = keras.layers.BatchNormalization()(conv1)
+    conv1 = keras.layers.ReLU()(conv1)
+    conv1 = keras.layers.Dropout(0.25)(conv1)
+
+    conv2 = keras.layers.Conv1D(filters=filter_size, kernel_size=kernel_size, padding="same")(conv1)
+    conv2 = keras.layers.BatchNormalization()(conv2)
+    conv2 = keras.layers.ReLU()(conv2)
+    conv2 = keras.layers.Dropout(0.25)(conv2)
+
+    conv3 = keras.layers.Conv1D(filters=filter_size, kernel_size=kernel_size, padding="same")(conv2)
+    conv3 = keras.layers.BatchNormalization()(conv3)
+    conv3 = keras.layers.ReLU()(conv3)
+    conv3 = keras.layers.Dropout(0.25)(conv3)
+
+    gap = keras.layers.GlobalAveragePooling1D()(conv3)
+
+    output_layer = keras.layers.Dense(1, activation=None)(gap)
+    model = keras.models.Model(inputs=input_layer, outputs=output_layer)
+
+    model.compile(tf.optimizers.Adam(1e-2), loss="mse", run_eagerly=False,  metrics=["accuracy"])
+
+    return model 
+
+
+def visual_validation(model, speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, test_epochs=[]):
     for i, target in enumerate(targets):
 
         for j in range(1, num_subjects + 1): # 20 subjects in total
@@ -93,7 +134,8 @@ def visual_validation(model, speech_type: str, eeg_nodes: list[str], targets: li
                 continue
 
             subject = f"sub-{j:02}"
-            test_array = random.sample(range(epochs), round(test_split * epochs) )
+            # get test array for subject
+            test_array = test_epochs[j - 1]
             print(f"Using epochs as test for subject {subject} target {target}: ", test_array)
 
             for epoch in range(epochs):
@@ -146,8 +188,8 @@ def visual_validation(model, speech_type: str, eeg_nodes: list[str], targets: li
 
 if __name__ == "__main__":
 
-    BATCH_SIZE = 16
-    EPOCHS= 20
+    BATCH_SIZE = 256
+    EPOCHS= 200
 
     TARGETS = ["aa", "oo", "ee", "ie", "oe"]
     EEG_NODES = ["Fz", "C3", "Cz", "C4", "Pz", "PO7", "Oz", "PO8"]
@@ -159,20 +201,21 @@ if __name__ == "__main__":
 
     # with warnings.catch_warnings():
     #     warnings.simplefilter("ignore")
-    #     train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=1, test_split=0.2)
+    #     train_x, train_y, test_x, test_y, test_epochs = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=1, test_split=0.2)
 
     # np.save("train_x_prespeech", train_x)
     # np.save("train_y_prespeech", train_y)
     # np.save("test_x_prespeech", test_x)
     # np.save("test_y_prespeech", test_y)
+    # np.save("test_epochs_prespeech", test_epochs)
 
     train_x = np.load("train_x_prespeech.npy")
     train_y = np.load("train_y_prespeech.npy")
 
     test_x = np.load("test_x_prespeech.npy")
     test_y = np.load("test_y_prespeech.npy")
+    test_epochs =  np.load("test_epochs_prespeech.npy")
 
-   
     train_x_flat = []
     train_y_flat = []
     for i in train_x:
@@ -188,13 +231,14 @@ if __name__ == "__main__":
 
     features = train_x.shape[-1]
     model = generate_model(features=features, batch_size=BATCH_SIZE)
+    # model = generate_conv_model(features=features, batch_size=BATCH_SIZE)
     model.summary()
 
-    model = load_model("prespeech_save_all_nodes.h5")
-    # save_callback = create_save_callback("prespeech_save_all_nodes", "loss", "min")
-    # model.fit(train_x_flat[:30000], train_y_flat[:30000], epochs=EPOCHS, shuffle=True, batch_size=BATCH_SIZE, callbacks=[save_callback])
+    model = load_model("prespeech_save_all_nodes_LSTM.h5")
+    save_callback = create_save_callback("prespeech_save_all_nodes", "loss", "min")
+    # model.fit(train_x_flat[:], train_y_flat[:], epochs=EPOCHS, shuffle=True, batch_size=BATCH_SIZE, callbacks=[save_callback])
 
-    # model = load_model("prespeech_save.h5")
+    model = load_model("prespeech_save_all_nodes_LSTM.h5")
 
     model.save("prespeech_all_nodes.h5")
 
@@ -209,7 +253,7 @@ if __name__ == "__main__":
     test_x_flat = np.array(test_x_flat)
     test_y_flat = np.array(test_y_flat)
 
-    visual_validation(model, SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=1, test_split=0.2)
+    visual_validation(model, "covert", EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=1, test_split=0.2, test_epochs=test_epochs)
 
     y_hat = model.predict(test_x_flat[:2048 * 10], verbose=1, batch_size=BATCH_SIZE)
     target_signal = test_y_flat[:2048 * 10]
