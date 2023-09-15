@@ -1,8 +1,6 @@
 from mne.io import read_raw_eeglab, read_epochs_eeglab, RawArray
-from mne import grand_average
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import butter, lfilter, freqz
 import warnings
 from sktime.classification.kernel_based import RocketClassifier
 from sktime.classification.hybrid import HIVECOTEV2
@@ -22,17 +20,15 @@ from librosa import resample
 import tensorflow as tf
 
 from keras.models import Sequential, load_model
-from keras.layers import LSTM, Dense, Conv1D, Dropout
+from keras.layers import LSTM, Dense
 from keras import regularizers
 import keras.layers
-from sklearn.inspection import permutation_importance
 
-from helpers.processing import normalize
 from helpers.filtering import filter_data, rereference
 
 import random
 
-random.seed(69)
+random.seed(42)
 
 def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=False):
     xs = []
