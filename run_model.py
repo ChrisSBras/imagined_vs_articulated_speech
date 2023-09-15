@@ -185,32 +185,11 @@ if __name__ == "__main__":
     np.save("test_x", test_x)
     np.save("test_y", test_y)
 
-
     train_x = np.load("train_x.npy")
     train_y = np.load("train_y.npy")
 
     test_x = np.load("test_x.npy")
     test_y = np.load("test_y.npy")
-
-    print(test_y)
-
-    print(test_x.shape, test_y.shape)
-    
-    # mu, std = normalize_coeffs(np.vstack((train_x, test_x)))
-
-    # train_x = (train_x - mu) / std
-    # test_x = (test_x - mu) / std
-
-    # rocket = RocketClassifier(num_kernels=2000)
-    # rocket.fit(train_x, train_y.flatten())
-
-    # catch22 = Catch22()
-    # randf = RandomForestClassifier(n_estimators=100)
-    # pipe = make_pipeline(catch22, randf)
-
-    # svc = TimeSeriesSVC(n_jobs=-1, verbose=1)
-
-    # svc.fit(train_x, train_y.flatten())
 
     model = load_model("model.h5")
 
