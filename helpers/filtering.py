@@ -3,7 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def filter_data(data: np.array, f1=0.1, f2=40, fs=1024) -> np.array:
-
+    """
+    Applies bandpass filter on data between given frequencies f1 and f2 with samplerate fs.
+    """
     to_return = []
 
     for channel in data.T:

@@ -214,36 +214,16 @@ if __name__ == "__main__":
 
     model = load_model("model.h5")
 
-    print(train_x.shape)
-
     model = make_model(input_shape=(2048, train_x.shape[2]), num_y=train_y.shape[-1])
     model.summary()
     model.fit(train_x, train_y, verbose=2, epochs=150, shuffle=True, batch_size=64,callbacks=[model_checkpoint_callback], validation_data=(test_x, test_y))
     model.save("model.h5")
 
     model = load_model("model_save.h5")
-    # model.save("model_49.h")
-
-
 
     test_loss, test_acc = model.evaluate(test_x, test_y)
 
     print(test_loss, test_acc)
-
-    # # Calculate the feature importance scores
-    # results = permutation_importance(model, test_x, test_y, n_repeats=10, random_state=42)
-    # importance = results.importances_mean
-
-    # # Print the feature importance scores
-    # for i,v in enumerate(importance):
-    #     print('Feature %d: %.5f' % (i,v))
-
-    # # Plot the feature importance chart
-    # plt.bar([x for x in range(len(importance))], importance)
-    # plt.show()
-
-    # exit()
-
 
     results = model.predict(test_x)
     total = 0
