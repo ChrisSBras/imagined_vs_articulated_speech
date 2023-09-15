@@ -7,6 +7,11 @@ To run the models, first you need to install the required python packages.
 pip install -r requirements.txt
 ```
 
+## Data structure
+The data contains EEG and audio signals for 20 subjects. Each subject has data for multiple words and vowels. This project used the derivatives folder as this contains the arranged data instead of raw directly from the EEG session. 
+
+The [`helpers.data`](./helpers/data.py) module can be used to easily read data from this folder by simply specifying the subject and which task and speech type you want to use. 
+
 ## Running the Overt Speech Model
 To run the baseline overt speech model, simply run the script `run_model.py`. This will first generate the data and save it for further use. 
 
