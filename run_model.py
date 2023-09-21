@@ -19,18 +19,18 @@ from librosa import resample
 
 import tensorflow as tf
 
-from keras.models import Sequential, load_model
-from keras.layers import LSTM, Dense
-from keras import regularizers
+from keras.models import load_model
+
 import keras.layers
 
 from helpers.filtering import filter_data, rereference
+from helpers.model import create_conv_model, create_lstm_model
 
 import random
 
 random.seed(42)
 
-def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=False):
+def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=False, use_all_nodes=True):
     xs = []
     ys = []
 
@@ -61,7 +61,9 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
                 else:
                      filtered_df = epoch_df.drop(["time", "condition", "epoch"], axis=1)
 
-                filtered_df = epoch_df[eeg_nodes]
+                if not use_all_nodes:
+                    filtered_df = epoch_df[eeg_nodes]
+
                 numpy_df = filtered_df.to_numpy()
       
 
@@ -95,24 +97,6 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
         
     return np.array(xs), np.array(ys), np.array(test_xs), np.array(test_ys)
 
-def create_model():
-    model = Sequential()
-    # model.add(LSTM(units=16, input_shape=(2048, 8), return_sequences=False, stateful=False))
-    model.add(LSTM(48, activity_regularizer=regularizers.L2(1e-5), return_sequences=True ))
-    model.add(Dense(48, activation="tanh", activity_regularizer=regularizers.L2(1e-5)))
-    model.add(LSTM(16, activity_regularizer=regularizers.L2(1e-5), return_sequences=False ))
-    model.add(Dense(4, activation="relu", activity_regularizer=regularizers.L2(1e-5)))
-    model.add(Dense(5, activation="softmax"))
-
-    
-    loss = tf.keras.losses.SparseCategoricalCrossentropy(
-        name="sparse_categorical_crossentropy",
-    )
-    cce = tf.keras.losses.CategoricalCrossentropy()
-
-    model.compile(tf.optimizers.Adam(1e-2), loss=cce, run_eagerly=False,  metrics=["accuracy"])
-    
-    return model
 
 model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
     filepath=f"model_save.h5",
@@ -126,38 +110,6 @@ def normalize_coeffs(data):
     std = np.std(data, axis=0)
 
     return mean, std
-
-def make_model(input_shape=(2048, 61), num_y=5):
-    input_layer = keras.layers.Input(input_shape)
-
-    filter_size = 32
-    kernel_size = 3
-
-    conv1 = keras.layers.Conv1D(filters=filter_size, kernel_size=kernel_size, padding="same")(input_layer)
-    conv1 = keras.layers.BatchNormalization()(conv1)
-    conv1 = keras.layers.ReLU()(conv1)
-    conv1 = keras.layers.Dropout(0.25)(conv1)
-
-    conv2 = keras.layers.Conv1D(filters=filter_size, kernel_size=kernel_size, padding="same")(conv1)
-    conv2 = keras.layers.BatchNormalization()(conv2)
-    conv2 = keras.layers.ReLU()(conv2)
-    conv2 = keras.layers.Dropout(0.25)(conv2)
-
-    conv3 = keras.layers.Conv1D(filters=filter_size, kernel_size=kernel_size, padding="same")(conv2)
-    conv3 = keras.layers.BatchNormalization()(conv3)
-    conv3 = keras.layers.ReLU()(conv3)
-    conv3 = keras.layers.Dropout(0.25)(conv3)
-
-    gap = keras.layers.GlobalAveragePooling1D()(conv3)
-
-    output_layer = keras.layers.Dense(num_y, activation="softmax")(gap)
-    model = keras.models.Model(inputs=input_layer, outputs=output_layer)
-
-    cce = tf.keras.losses.CategoricalCrossentropy()
-
-    model.compile(tf.optimizers.Adam(1e-2), loss=cce, run_eagerly=False,  metrics=["accuracy"])
-
-    return model 
 
 if __name__ == "__main__":
  
@@ -189,7 +141,7 @@ if __name__ == "__main__":
 
     model = load_model("model.h5")
 
-    model = make_model(input_shape=(2048, train_x.shape[2]), num_y=train_y.shape[-1])
+    model = create_conv_model(input_shape=(2048, train_x.shape[2]), num_y=train_y.shape[-1])
     model.summary()
     model.fit(train_x, train_y, verbose=2, epochs=150, shuffle=True, batch_size=64,callbacks=[model_checkpoint_callback], validation_data=(test_x, test_y))
     model.save("model.h5")
