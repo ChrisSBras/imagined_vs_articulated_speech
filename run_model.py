@@ -21,16 +21,18 @@ import tensorflow as tf
 
 from keras.models import load_model
 
-import keras.layers
+import wavfile
 
-from helpers.filtering import filter_data, rereference
+
+from helpers.filtering import filter_data, rereference, delete_speech
 from helpers.model import create_conv_model, create_lstm_model
+from helpers.vad import get_speech_marking_for_file, VAD_SAMPLING_RATE
 
 import random
 
 random.seed(42)
 
-def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=False, use_all_nodes=True):
+def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=False, use_all_nodes=True, use_marking=True):
     xs = []
     ys = []
 
@@ -52,10 +54,8 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
             print("Using epochs as test: ", test_array)
 
             for epoch in range(epochs):
-                
                 epoch_df = df[df["epoch"] == epoch]
                
-
                 if "FC2" in epoch_df.keys():
                      filtered_df = epoch_df.drop(["time", "condition", "epoch", 'FC2'], axis=1)
                 else:
@@ -66,7 +66,6 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
 
                 numpy_df = filtered_df.to_numpy()
       
-
                 if numpy_df.shape[0] != 2048:
                     continue # skip epochs that are not exactly right for now
                 
@@ -74,13 +73,6 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
 
                 if use_filter:
                     numpy_df = filter_data(numpy_df)
-                
-                # new_array = []
-                        
-                # for data in numpy_df.T:
-                #     new_array.append(moving_average(data.copy()))
-
-                # numpy_df = np.array(new_array).T
 
                 y = [0 for _ in targets]
                 y[i] = 1

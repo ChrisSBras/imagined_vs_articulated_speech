@@ -17,3 +17,17 @@ def mark_pre_speech_section(audio_data: np.array) -> np.array:
             result.append(0)
             
     return np.array(result)
+
+
+def delete_speech(data: np.array, marking: np.array):
+    """
+    Removes speech signals from EEG data by using given marking array
+    """
+
+    new_data = []
+
+    for channel in data.T:
+        new_data.append(channel * marking)
+
+    new_data = np.array(new_data)
+    return new_data.T
