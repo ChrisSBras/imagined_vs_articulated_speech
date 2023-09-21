@@ -69,8 +69,6 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
       
                 if numpy_df.shape[0] != 2048:
                     continue # skip epochs that are not exactly right for now
-                
-                numpy_df = rereference(numpy_df)
 
                 if use_filter:
                     numpy_df = filter_data(numpy_df)
@@ -87,6 +85,8 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
                     except:
                         # skip this datapoint if no speech is detected
                         continue
+
+                numpy_df = rereference(numpy_df)
                 
                 y = [0 for _ in targets]
                 y[i] = 1
