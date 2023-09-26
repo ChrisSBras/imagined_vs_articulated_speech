@@ -199,15 +199,15 @@ if __name__ == "__main__":
     females = [1, 3, 4, 5, 6, 7, 8, 9, 10, 14, 16, 17, 18, 19]
     noise = [9, 13, 7, 17, 2]
 
-    # with warnings.catch_warnings():
-    #     warnings.simplefilter("ignore")
-    #     train_x, train_y, test_x, test_y, test_epochs = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=1, test_split=0.2)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        train_x, train_y, test_x, test_y, test_epochs = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=1, test_split=0.2)
 
-    # np.save("train_x_prespeech", train_x)
-    # np.save("train_y_prespeech", train_y)
-    # np.save("test_x_prespeech", test_x)
-    # np.save("test_y_prespeech", test_y)
-    # np.save("test_epochs_prespeech", test_epochs)
+    np.save("train_x_prespeech", train_x)
+    np.save("train_y_prespeech", train_y)
+    np.save("test_x_prespeech", test_x)
+    np.save("test_y_prespeech", test_y)
+    np.save("test_epochs_prespeech", test_epochs)
 
     train_x = np.load("train_x_prespeech.npy")
     train_y = np.load("train_y_prespeech.npy")

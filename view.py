@@ -5,6 +5,7 @@ from helpers.processing import moving_average, normalize
 from helpers.preprocessing import mark_pre_speech_section
 from helpers.data import get_data
 from helpers.filtering import filter_data
+from helpers.preprocessing import delete_speech
 
 if __name__ == "__main__":
     
@@ -19,7 +20,6 @@ if __name__ == "__main__":
     for epoch in range(0, 20):
         eeg_data_covert, audio_data, prespeech_marking = get_data(subject="sub-01", speech_type="covert", epoch=epoch, eeg_nodes=EEG_NODES,target=TARGET, use_filter=True )
         eeg_data_overt, audio_data, prespeech_marking = get_data(subject="sub-01", speech_type="overt", epoch=epoch, eeg_nodes=EEG_NODES, target=TARGET, use_filter=True)
-
         audio_data = normalize(audio_data)
 
         fig, (ax1, ax2, ax3) = plt.subplots(3)
