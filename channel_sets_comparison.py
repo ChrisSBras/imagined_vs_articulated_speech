@@ -1,10 +1,7 @@
 """
-This module runs an experiment to compare the effect of the speech data in the EEG signal.
+This module runs an experiment to compare the effect of the channels.
 
-First a model is made with all EEG present, this is repeated 3 times and an average accuracy is taken.
-After this, a model is made with speech data in which at the start of the speech the EEG data is deleted, so only
-prespeech data is available for the model to train on. This is also repeated 3 times and an average accuracy is given.
-
+4 different sets of channels are used to compare the classification accuracies between them.
 """
 
 from mne.io import read_epochs_eeglab
@@ -79,7 +76,7 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
                         start_speech = markings[0]['start'] / VAD_SAMPLING_RATE * 1024.0
                         start_speech = int(start_speech)
 
-                        audio_marking[start_speech:] = 1 # inverted selection now
+                        audio_marking[:start_speech] = 1 # inverted selection now
 
                         numpy_df = delete_speech(numpy_df, audio_marking) 
                     except:
@@ -130,7 +127,7 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
         print("LOADING DATA...")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, nodes, TARGETS, excluded_subjects=noise, num_subjects=num_subjects, test_split=0.15, use_filter=True, use_marking=False, use_all_nodes=use_all_nodes)
+            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, nodes, TARGETS, excluded_subjects=noise, num_subjects=num_subjects, test_split=0.15, use_filter=True, use_marking=True, use_all_nodes=use_all_nodes)
 
         print("DONE LOADING DATA")
         # create a new model fo this run

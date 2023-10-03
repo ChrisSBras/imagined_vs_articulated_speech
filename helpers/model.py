@@ -19,7 +19,7 @@ def create_save_callback(name, monitor, mode="max"):
 def create_conv_model(input_shape=(2048, 61), num_y=5):
     input_layer = keras.layers.Input(input_shape)
 
-    filter_size = 32
+    filter_size = 64
     kernel_size = 3
 
     conv1 = keras.layers.Conv1D(filters=filter_size, kernel_size=kernel_size, padding="same")(input_layer)
