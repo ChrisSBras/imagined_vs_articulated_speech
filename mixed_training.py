@@ -147,7 +147,7 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
         model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
             filepath=f"cover_overt_classification_model_save_{name}_{i}.h5",
             save_weights_only=False,
-            monitor='val_accuracy',
+            monitor='val_loss',
             mode='max',
             save_best_only=True)
 
@@ -162,8 +162,8 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
         overt_results = model.predict(overt_test_x)
         covert_results = model.predict(covert_test_x) # no covert training
 
-        overt_correct, overt_total = count_correct_predictions(overt_results, overt_test_y)
-        covert_correct, covert_total = count_correct_predictions(covert_results, covert_test_y)
+        overt_correct, overt_total = count_correct_predictions(overt_results, overt_test_y, "mixed_training_overt_results", f"covert_overt_classification_model_{name}_{i}__OVERT")
+        covert_correct, covert_total = count_correct_predictions(covert_results, covert_test_y, "mixed_training_covert_results", f"covert_overt_classification_model_{name}_{i}__COVERT")
 
         print(f"predicted {overt_correct} / {overt_total} correct, accuracy of {(overt_correct / overt_total) * 100:.2f}% for OVERT classification")
         print(f"predicted {covert_correct} / {covert_total} correct, accuracy of {(covert_correct / covert_total) * 100:.2f}% for COVERT classification")
@@ -180,7 +180,7 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
 if __name__ == "__main__":
     EPOCHS = 200
     NUM_SUBJECTS = 20
-    N_REPEATS = 3
+    N_REPEATS = 10
     
     print("RUNNING OVERT MODEL COVERT CLASSIFICATION EXPERIMENT SUITE")
     result_overt, result_covert= run_experiment("MIXED TRAINING", [], epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=True, use_marking=False)

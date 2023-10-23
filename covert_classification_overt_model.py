@@ -15,6 +15,7 @@ from helpers.preprocessing import delete_speech
 from helpers.model import create_conv_model
 from helpers.vad import get_speech_marking_for_file, VAD_SAMPLING_RATE
 from helpers.analysis import count_correct_predictions
+from helpers.io import mkdir_p
 
 import random
 
@@ -138,7 +139,7 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
         model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
             filepath=f"cover_overt_classification_model_save_{name}_{i}.h5",
             save_weights_only=False,
-            monitor='val_accuracy',
+            monitor='val_loss',
             mode='max',
             save_best_only=True)
 
@@ -153,8 +154,8 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
         overt_results = model.predict(overt_test_x)
         covert_results = model.predict(covert_x) # no covert training
 
-        overt_correct, overt_total = count_correct_predictions(overt_results, overt_test_y)
-        covert_correct, covert_total = count_correct_predictions(covert_results, covert_y)
+        overt_correct, overt_total = count_correct_predictions(overt_results, overt_test_y, "covert_classification_overt_model__OVERT", f"cover_overt_classification_model___OVERT{name}_{i}")
+        covert_correct, covert_total = count_correct_predictions(covert_results, covert_y, "covert_classification_overt_model__COVERT", f"cover_overt_classification_model__COVERT{name}_{i}")
 
         print(f"predicted {overt_correct} / {overt_total} correct, accuracy of {(overt_correct / overt_total) * 100:.2f}% for OVERT classification")
         print(f"predicted {covert_correct} / {covert_total} correct, accuracy of {(covert_correct / covert_total) * 100:.2f}% for COVERT classification")
@@ -171,7 +172,7 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
 if __name__ == "__main__":
     EPOCHS = 150
     NUM_SUBJECTS = 20
-    N_REPEATS = 3
+    N_REPEATS = 10
     
     print("RUNNING OVERT MODEL COVERT CLASSIFICATION EXPERIMENT SUITE")
     no_marking_overt_result, no_marking_covert_result= run_experiment("NO Marking", [], epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=True, use_marking=False)

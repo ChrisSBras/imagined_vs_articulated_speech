@@ -79,13 +79,17 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
                         start_speech = markings[0]['start'] / VAD_SAMPLING_RATE * 1024.0
                         start_speech = int(start_speech)
 
-                        audio_marking[:start_speech] = 1
+                        audio_marking[start_speech:] = 1 # inverted selection now
 
-                        numpy_df = delete_speech(numpy_df, audio_marking)
+                        # numpy_df = delete_speech(numpy_df, audio_marking) 
+
+                        plt.plot(numpy_df)
+                        plt.show()
+                        
                     except:
                         # skip this datapoint if no speech is detected
                         continue
-
+                exit()
                 numpy_df = rereference(numpy_df)
                 
                 y = [0 for _ in targets]
@@ -137,7 +141,7 @@ if __name__ == "__main__":
         print("LOADING DATA...")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=20, test_split=0.15, use_filter=True, use_marking=False)
+            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=20, test_split=0.15, use_filter=True, use_marking=True)
 
         print("DONE LOADING DATA")
         # create a new model fo this run
@@ -147,7 +151,7 @@ if __name__ == "__main__":
         model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
             filepath=f"model_save_baseline_{i}.h5",
             save_weights_only=False,
-            monitor='val_accuracy',
+            monitor='val_loss',
             mode='max',
             save_best_only=True)
 
@@ -199,7 +203,7 @@ if __name__ == "__main__":
         model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
             filepath=f"model_save_test_{i}.h5",
             save_weights_only=False,
-            monitor='val_accuracy',
+            monitor='val_loss',
             mode='max',
             save_best_only=True)
 

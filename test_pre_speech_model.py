@@ -71,7 +71,7 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
                     speech_marker = int(model.predict(np.array([numpy_df]), verbose=0)[0][0] * 2048.0)
 
                     audio_marking = np.zeros_like(numpy_df[:, 0])
-                    audio_marking[:speech_marker] = 1
+                    audio_marking[speech_marker:] = 1
                     numpy_df = delete_speech(numpy_df, audio_marking)
                     numpy_df = rereference(numpy_df)
 
@@ -107,69 +107,72 @@ if __name__ == "__main__":
 
     N_REPEATS = 3
     NUM_SUBJECTS = 20
-    NUM_EPOCHS = 50
-    BATCH_SIZE = 32
+    NUM_EPOCHS = 150
+    BATCH_SIZE = 64
 
     females = [1, 3, 4, 5, 6, 7, 8, 9, 10, 14, 16, 17, 18, 19]
     noise = [9, 13, 7, 17, 2]
+    noise = []
 
     BASE_LINE_RESULTS = []
     TEST_RESULT = []
 
-    print("----------------- RUNNING BASELINE MODEL -------------------")
-    for i in range(N_REPEATS):
-        try:
-            os.remove(f"model_save_baseline_covert{i}.h5")
-        except:
-            pass
+    TEST_SPLIT = 0.15
 
-        print("LOADING DATA...")
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=NUM_SUBJECTS, test_split=0.15, use_filter=True, only_prespeech=False)
+    # print("----------------- RUNNING BASELINE MODEL -------------------")
+    # for i in range(N_REPEATS):
+    #     try:
+    #         os.remove(f"model_save_baseline_covert{i}.h5")
+    #     except:
+    #         pass
 
-        print("DONE LOADING DATA")
+    #     print("LOADING DATA...")
+    #     with warnings.catch_warnings():
+    #         warnings.simplefilter("ignore")
+    #         train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=NUM_SUBJECTS, test_split=TEST_SPLIT, use_filter=True, only_prespeech=False)
+
+    #     print("DONE LOADING DATA")
 
 
-        model = create_conv_model(input_shape=(2048, train_x.shape[2]), num_y=train_y.shape[-1])
-        model.summary()
+    #     model = create_conv_model(input_shape=(2048, train_x.shape[2]), num_y=train_y.shape[-1])
+    #     model.summary()
 
-        model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-            filepath=f"model_save_baseline_covert{i}.h5",
-            save_weights_only=False,
-            monitor='val_accuracy',
-            mode='max',
-            save_best_only=True)
+    #     model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+    #         filepath=f"model_save_baseline_covert{i}.h5",
+    #         save_weights_only=False,
+    #         monitor='val_accuracy',
+    #         mode='max',
+    #         save_best_only=True)
 
-        model.fit(train_x, train_y, verbose=2, epochs=NUM_EPOCHS, shuffle=True, batch_size=BATCH_SIZE,callbacks=[model_checkpoint_callback], validation_data=(test_x, test_y))
-        model.save("model.h5")
+    #     model.fit(train_x, train_y, verbose=2, epochs=NUM_EPOCHS, shuffle=True, batch_size=BATCH_SIZE,callbacks=[model_checkpoint_callback], validation_data=(test_x, test_y))
+    #     model.save("model.h5")
 
-        model = load_model(f"model_save_baseline_covert{i}.h5")
+    #     model = load_model(f"model_save_baseline_covert{i}.h5")
 
-        test_loss, test_acc = model.evaluate(test_x, test_y)
+    #     test_loss, test_acc = model.evaluate(test_x, test_y)
 
-        print(test_loss, test_acc)
+    #     print(test_loss, test_acc)
 
-        results = model.predict(test_x)
-        total = 0
-        right = 0
-        wrong = 0
+    #     results = model.predict(test_x)
+    #     total = 0
+    #     right = 0
+    #     wrong = 0
 
-        for i, result in enumerate(results):
-            y_hat = np.argmax(result) 
-            y_real = np.argmax(test_y[i])
+    #     for i, result in enumerate(results):
+    #         y_hat = np.argmax(result) 
+    #         y_real = np.argmax(test_y[i])
             
-            if (y_hat == y_real):
-                right += 1
-            else:
-                wrong += 1
-            total += 1
+    #         if (y_hat == y_real):
+    #             right += 1
+    #         else:
+    #             wrong += 1
+    #         total += 1
 
-        print(f"predicted {right} / {total} correct, accuracy of {(right / total) * 100:.2f}%")
-        BASE_LINE_RESULTS.append(right / total)
+    #     print(f"predicted {right} / {total} correct, accuracy of {(right / total) * 100:.2f}%")
+    #     BASE_LINE_RESULTS.append(right / total)
 
-    print("--------------- BASELINE DONE ---------------")
-    print(f"Average accuracy: {sum(BASE_LINE_RESULTS)/len(BASE_LINE_RESULTS)* 100:.2f}%")
+    # print("--------------- BASELINE DONE ---------------")
+    # print(f"Average accuracy: {sum(BASE_LINE_RESULTS)/len(BASE_LINE_RESULTS)* 100:.2f}%")
 
 
     print("----------------- RUNNING PRESPEECH MODEL -------------------")
@@ -182,7 +185,7 @@ if __name__ == "__main__":
         print("LOADING DATA...")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=NUM_SUBJECTS, test_split=0.15, use_filter=True, only_prespeech=True)
+            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=NUM_SUBJECTS, test_split=TEST_SPLIT, use_filter=True, only_prespeech=True)
 
         print("DONE LOADING DATA")
 
@@ -193,7 +196,7 @@ if __name__ == "__main__":
         model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
             filepath=f"model_save_nospeech_covert{i}.h5",
             save_weights_only=False,
-            monitor='val_accuracy',
+            monitor='val_loss',
             mode='max',
             save_best_only=True)
 
@@ -225,7 +228,7 @@ if __name__ == "__main__":
         TEST_RESULT.append(right / total)
 
     print("--------------- TEST RESULT DONE ---------------")
-    print(f"Average baseline accuracy: {sum(BASE_LINE_RESULTS)/len(BASE_LINE_RESULTS)* 100:.2f}%")
+    # print(f"Average baseline accuracy: {sum(BASE_LINE_RESULTS)/len(BASE_LINE_RESULTS)* 100:.2f}%")
     print(f"Average test accuracy: {sum(TEST_RESULT)/len(TEST_RESULT)* 100:.2f}%")
 
     print("------------------------------------------------")

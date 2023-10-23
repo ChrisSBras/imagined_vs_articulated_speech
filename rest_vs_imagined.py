@@ -1,7 +1,7 @@
 """
-This module runs an experiment to compare the effect of the channels.
+This experiment combines rest data with imagined data to try and confuse the classifier.
 
-4 different sets of channels are used to compare the classification accuracies between them.
+If there is not a substantial difference between rest and imagined data, this experiment should show that
 """
 import os
 from mne.io import read_epochs_eeglab
@@ -17,7 +17,6 @@ from helpers.filtering import filter_data, rereference
 from helpers.preprocessing import delete_speech
 from helpers.model import create_conv_model
 from helpers.vad import get_speech_marking_for_file, VAD_SAMPLING_RATE
-
 from helpers.io import mkdir_p
 
 import random
@@ -87,8 +86,8 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
 
                 numpy_df = rereference(numpy_df)
                 
-                y = [0 for _ in targets]
-                y[i] = 1
+                y = [0 for _ in range(len(targets) + 1)] # + 1 for rest class
+                y[i] = 1 # targets are 0 indexed, rest is always last class
 
                 if epoch in test_array: # this now is a test sample :)
                     test_xs.append(numpy_df)
@@ -99,6 +98,67 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
 
             loaded += 1
             print(f"Loaded {loaded}/{total_data_count} data", end="\r")
+    print()
+    return np.array(xs), np.array(ys), np.array(test_xs), np.array(test_ys)
+
+
+def load_rest_data( eeg_nodes: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=False, use_all_nodes=True, num_targets=6):
+    xs = []
+    ys = []
+
+    test_xs = []
+    test_ys = []
+
+    total_data_count = num_subjects
+    loaded = 0
+
+    for j in range(1, num_subjects + 1): # 20 subjects in total
+            
+            if j in excluded_subjects: # skip excluded subjects
+                continue
+
+            subject = f"sub-{j:02}"
+            data = read_epochs_eeglab(f"./data/derivatives/{subject}/eeg/{subject}_task-rest_eeg.set", verbose=False)
+            df = data.to_data_frame()
+
+            # pick n random epochs to use, to keep data balanced
+            epochs_to_use = random.sample(range(df['epoch'].max()), epochs)
+            test_array = random.sample(epochs_to_use, round(test_split * epochs))
+
+            for epoch in epochs_to_use:
+                epoch_df = df[df["epoch"] == epoch]
+               
+                if "FC2" in epoch_df.keys():
+                     filtered_df = epoch_df.drop(["time", "condition", "epoch", 'FC2'], axis=1)
+                else:
+                     filtered_df = epoch_df.drop(["time", "condition", "epoch"], axis=1)
+
+                if not use_all_nodes:
+                    filtered_df = epoch_df[eeg_nodes]
+
+                numpy_df = filtered_df.to_numpy()
+      
+                if numpy_df.shape[0] != 2048:
+                    continue # skip epochs that are not exactly right for now
+
+                if use_filter:
+                    numpy_df = filter_data(numpy_df)
+
+                numpy_df = rereference(numpy_df)
+                
+                y = [0 for _ in range(num_targets)]
+                y[-1] = 1
+
+                if epoch in test_array: # this now is a test sample :)
+                    test_xs.append(numpy_df)
+                    test_ys.append(np.array(y))
+                else:    
+                    xs.append(numpy_df)
+                    ys.append(np.array(y))
+
+            loaded += 1
+            print(f"Loaded {loaded}/{total_data_count} data", end="\r")
+
     print()
     return np.array(xs), np.array(ys), np.array(test_xs), np.array(test_ys)
 
@@ -113,10 +173,12 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
     Runs 1 set of experiments
     """
     RESULT = []
+    TEST_SPLIT = 0.2
 
     noise = [9, 13, 7, 17, 2]
-    SPEECH_TYPE = "overt"
+    SPEECH_TYPE = "covert"
     TARGETS = ["aa", "oo", "ee", "ie", "oe"]
+    # TARGETS = ["ie", "oe"]
 
     print(f"----------------- RUNNING {name} EXPERIMENTS -------------------")
     for i in range(num_repeat):
@@ -126,10 +188,22 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
             pass
 
         print(f"RUN {i + 1}/{num_repeat}")
-        print("LOADING DATA...")
+        print("LOADING IMAGINED DATA...")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, nodes, TARGETS, excluded_subjects=noise, num_subjects=num_subjects, test_split=0.15, use_filter=True, use_marking=True, use_all_nodes=use_all_nodes)
+            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, nodes, TARGETS, excluded_subjects=noise, num_subjects=num_subjects, test_split=TEST_SPLIT, use_filter=True, use_marking=False, use_all_nodes=use_all_nodes)
+
+        print("LOADING REST DATA...")
+        # with warnings.catch_warnings():
+        #     warnings.simplefilter("ignore")
+        #     rest_train_x, rest_train_y, rest_test_x, rest_test_y = load_rest_data(nodes, excluded_subjects=noise, num_subjects=num_subjects, test_split=TEST_SPLIT, epochs=20, use_filter=True, use_all_nodes=use_all_nodes, num_targets=len(TARGETS) + 1)
+
+        # add rest data to train and test data
+        # train_x = np.vstack((train_x, rest_train_x))
+        # train_y = np.vstack((train_y, rest_train_y))
+        # test_x = np.vstack((test_x, rest_test_x))
+        # test_y = np.vstack((test_y, rest_test_y))
+
 
         print("DONE LOADING DATA")
         # create a new model fo this run
@@ -156,8 +230,8 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
         total = 0
         right = 0
         wrong = 0
-        mkdir_p("channel_sets_comparison_result")
-        with open(f"channel_sets_comparison_result/result_{name}_{i}.txt", "w") as f:
+        mkdir_p("rest_vs_imagined_result")
+        with open(f"rest_vs_imagined_result/result_{name}_{i}.txt", "w") as f:
             for j, result in enumerate(results):
                     y_hat = np.argmax(result) 
                     y_real = np.argmax(test_y[j])
@@ -184,7 +258,7 @@ if __name__ == "__main__":
     EPOCHS = 150
     NUM_SUBJECTS = 20
     
-    print("RUNNING CHANNEL EXPERIMENT SUITE")
+    print("RUNNING REST vs COVERT EXPERIMENT SUITE")
 
     PAPER_NODES = ["Fz", "C3", "Cz", "C4", "Pz", "PO7", "Oz", "PO8"]
     POSTER_NODES = ["F7", "F5", "FT7", "FC5", "FC3", "FC1", "T7", "C5", "C3", "Cz", "C4", "TP7", "CP5", "CP3", "P5", "P3"]
@@ -193,14 +267,14 @@ if __name__ == "__main__":
     N_REPEATS = 10
 
     ALL_NODES_RESULT = run_experiment("ALL_NODES", [], epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=True)
-    IOANNIS_NODES_RESULT = run_experiment("IOANNIS_NODES", IOANNIS_NODES, epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=False)
-    POSTER_NODES_RESULT =  run_experiment("POSTER_NODES", POSTER_NODES, epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=False)
-    PAPER_NODES_RESULT =  run_experiment("PAPER_NODES", PAPER_NODES, epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=False)
+    # IOANNIS_NODES_RESULT = run_experiment("IOANNIS_NODES", IOANNIS_NODES, epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=False)
+    # POSTER_NODES_RESULT =  run_experiment("POSTER_NODES", POSTER_NODES, epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=False)
+    # PAPER_NODES_RESULT =  run_experiment("PAPER_NODES", PAPER_NODES, epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=False)
     
    
     print("------------------------------------------------")
     print()
     print("Baseline", ALL_NODES_RESULT , sum(ALL_NODES_RESULT) / len(ALL_NODES_RESULT))
-    print("Ioannis", IOANNIS_NODES_RESULT , sum(IOANNIS_NODES_RESULT) / len(IOANNIS_NODES_RESULT))
-    print("Poster", POSTER_NODES_RESULT , sum(POSTER_NODES_RESULT) / len(POSTER_NODES_RESULT))
-    print("Paper", PAPER_NODES_RESULT , sum(PAPER_NODES_RESULT) / len(PAPER_NODES_RESULT))
+    # print("Ioannis", IOANNIS_NODES_RESULT , sum(IOANNIS_NODES_RESULT) / len(IOANNIS_NODES_RESULT))
+    # print("Poster", POSTER_NODES_RESULT , sum(POSTER_NODES_RESULT) / len(POSTER_NODES_RESULT))
+    # print("Paper", PAPER_NODES_RESULT , sum(PAPER_NODES_RESULT) / len(PAPER_NODES_RESULT))
