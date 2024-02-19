@@ -119,8 +119,8 @@ def run_dataset(train_x, train_y, test_x, test_y, epochs) -> tuple:
     model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
         filepath=f"final_run_checkpoint_model.h5",
         save_weights_only=False,
-        monitor='val_loss',
-        mode='min',
+        monitor='val_accuracy',
+        mode='max',
         save_best_only=True)
 
     model.fit(train_x, train_y, verbose=2, epochs=epochs, shuffle=True, batch_size=16,callbacks=[model_checkpoint_callback], validation_data=(test_x, test_y))
@@ -172,7 +172,7 @@ if __name__ == "__main__":
     EEG_NODES_IOANNIS = ["F3", "F4", "C3", "C4", "P3", "P4"]
 
     TEST_SPLIT = 0.2
-    NUM_SUBJECTS = 20
+    NUM_SUBJECTS = 1
     EPOCHS = 150
     N_REPEATS = 5
 
