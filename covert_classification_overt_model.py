@@ -172,7 +172,7 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
 if __name__ == "__main__":
     EPOCHS = 150
     NUM_SUBJECTS = 20
-    N_REPEATS = 10
+    N_REPEATS = 5
     
     print("RUNNING OVERT MODEL COVERT CLASSIFICATION EXPERIMENT SUITE")
     no_marking_overt_result, no_marking_covert_result= run_experiment("NO Marking", [], epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=True, use_marking=False)

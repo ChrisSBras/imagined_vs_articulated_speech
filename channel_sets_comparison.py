@@ -13,7 +13,7 @@ import tensorflow as tf
 
 from keras.models import load_model
 
-from helpers.filtering import filter_data, rereference
+from helpers.filtering import filter_data, rereference, normalize_df
 from helpers.preprocessing import delete_speech
 from helpers.model import create_conv_model
 from helpers.vad import get_speech_marking_for_file, VAD_SAMPLING_RATE
@@ -24,7 +24,7 @@ import random
 
 random.seed(42)
 
-def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=False, use_all_nodes=True, use_marking=True):
+def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=True, use_all_nodes=True, use_marking=True):
     xs = []
     ys = []
 
@@ -68,6 +68,11 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
       
                 if numpy_df.shape[0] != 2048:
                     continue # skip epochs that are not exactly right for now
+
+                if np.any(np.abs(numpy_df) > 40):
+                    continue # skip peaky things
+                
+                # numpy_df = normalize_df(numpy_df)
 
                 if use_filter:
                     numpy_df = filter_data(numpy_df)
@@ -115,7 +120,7 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
     RESULT = []
 
     noise = [9, 13, 7, 17, 2]
-    SPEECH_TYPE = "overt"
+    SPEECH_TYPE = "covert"
     TARGETS = ["aa", "oo", "ee", "ie", "oe"]
 
     print(f"----------------- RUNNING {name} EXPERIMENTS -------------------")
@@ -129,8 +134,9 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
         print("LOADING DATA...")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, nodes, TARGETS, excluded_subjects=noise, num_subjects=num_subjects, test_split=0.15, use_filter=True, use_marking=True, use_all_nodes=use_all_nodes)
+            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, nodes, TARGETS, excluded_subjects=noise, num_subjects=num_subjects, test_split=0.2, use_filter=True, use_marking=False, use_all_nodes=use_all_nodes)
 
+        print(train_x.shape)
         print("DONE LOADING DATA")
         # create a new model fo this run
         model = create_conv_model(input_shape=(2048, train_x.shape[2]), num_y=train_y.shape[-1])
@@ -139,7 +145,7 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
         model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
             filepath=f"model_save_{name}_{i}.h5",
             save_weights_only=False,
-            monitor='val_loss',
+            monitor='val_accuracy',
             mode='max',
             save_best_only=True)
 
@@ -156,8 +162,8 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
         total = 0
         right = 0
         wrong = 0
-        mkdir_p("channel_sets_comparison_result")
-        with open(f"channel_sets_comparison_result/result_{name}_{i}.txt", "w") as f:
+        mkdir_p(f"channel_sets_comparison_result/{name}/")
+        with open(f"channel_sets_comparison_result/{name}/result_{name}_{i}.txt", "w") as f:
             for j, result in enumerate(results):
                     y_hat = np.argmax(result) 
                     y_real = np.argmax(test_y[j])
@@ -190,7 +196,7 @@ if __name__ == "__main__":
     POSTER_NODES = ["F7", "F5", "FT7", "FC5", "FC3", "FC1", "T7", "C5", "C3", "Cz", "C4", "TP7", "CP5", "CP3", "P5", "P3"]
     IOANNIS_NODES = ["F3", "F4", "C3", "C4", "P3", "P4"]
 
-    N_REPEATS = 10
+    N_REPEATS = 5
 
     ALL_NODES_RESULT = run_experiment("ALL_NODES", [], epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=True)
     IOANNIS_NODES_RESULT = run_experiment("IOANNIS_NODES", IOANNIS_NODES, epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=False)

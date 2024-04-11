@@ -34,3 +34,15 @@ def rereference(data: np.array) -> np.array:
 
     new_data = np.array(new_data)
     return new_data.T
+
+def normalize_df(data: np.array) -> np.array:
+
+    return data / np.max(np.abs(data))
+    to_return = []
+
+    for channel in data.T:
+        normalized_channel = channel / np.max(np.abs(channel))    
+        to_return.append(normalized_channel)
+
+    to_return = np.array(to_return)
+    return to_return.T

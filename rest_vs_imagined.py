@@ -18,10 +18,18 @@ from helpers.preprocessing import delete_speech
 from helpers.model import create_conv_model
 from helpers.vad import get_speech_marking_for_file, VAD_SAMPLING_RATE
 from helpers.io import mkdir_p
+from sklearn.preprocessing import MinMaxScaler
+from tslearn.preprocessing import TimeSeriesScalerMinMax
+from keras import backend as K
+
+from sklearn.manifold import TSNE
+from tcn import TCN # definition needed for model loading
 
 import random
 
 random.seed(42)
+
+
 
 def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=False, use_all_nodes=True, use_marking=True):
     xs = []
@@ -32,6 +40,9 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
 
     total_data_count = len(targets) * num_subjects
     loaded = 0
+
+    test_array = random.sample(range(epochs), round(test_split * epochs) )
+    print(f"Using {test_array} as test")
     
     for i, target in enumerate(targets):
 
@@ -43,8 +54,6 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
             subject = f"sub-{j:02}"
             data = read_epochs_eeglab(f"./data/derivatives/{subject}/eeg/{subject}_task-{speech_type}-{target}_eeg.set", verbose=False)
             df = data.to_data_frame()
-
-            test_array = random.sample(range(epochs), round(test_split * epochs) )
 
             for epoch in range(epochs):
                 
@@ -86,7 +95,7 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
 
                 numpy_df = rereference(numpy_df)
                 
-                y = [0 for _ in range(len(targets) + 1)] # + 1 for rest class
+                y = [0 for _ in range(len(targets))] # + 1 for rest class
                 y[i] = 1 # targets are 0 indexed, rest is always last class
 
                 if epoch in test_array: # this now is a test sample :)
@@ -168,6 +177,53 @@ def normalize_coeffs(data):
 
     return mean, std
 
+
+def generate_tsne_plot(model, directory, filename, xs, ys):
+    ["aa", "oo", "ee", "ie", "oe"]
+    colors_choices = ["red", "green", "blue", "yellow", "orange", "black"]
+
+    loss, accuracy = model.evaluate(xs, ys)
+
+    mkdir_p(directory + f"/{filename}/" )
+
+    for i, layer in enumerate(model.layers):
+
+        get_dense_out = K.function([model.layers[0].input],
+                                [model.layers[i].output])
+
+        result = get_dense_out(xs)[0]
+
+        result_to_use = []
+        for r in result:
+            result_to_use.append(r.flatten())
+
+        result_to_use = np.array(result_to_use)
+
+        try:
+            X_tsne = TSNE(n_components=2, n_jobs=-1, perplexity=3).fit_transform(result_to_use)
+        except:
+            # skip this layer
+            continue
+        x = X_tsne[:, 0]
+        y = X_tsne[:, 1]
+        
+        colors = []
+
+        plt.title(f"Layer {i} {layer.name}, Model Accuracy: {accuracy * 100: .2f}")
+
+        for true_y in ys:
+            value = np.argmax(true_y)
+            colors.append(colors_choices[value])
+
+        sc = plt.scatter(x, y, c=colors)
+
+        plt.savefig(directory + f"/{filename}/" + filename + f"_layer_{i}" + ".png")
+
+        plt.figure().clear()
+        plt.close()
+        plt.cla()
+        plt.clf()
+
 def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_repeat: int, use_all_nodes=False):
     """
     Runs 1 set of experiments
@@ -176,15 +232,18 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
     TEST_SPLIT = 0.2
 
     noise = [9, 13, 7, 17, 2]
+    # noise = []
     SPEECH_TYPE = "covert"
     TARGETS = ["aa", "oo", "ee", "ie", "oe"]
     # TARGETS = ["ie", "oe"]
+    
 
     print(f"----------------- RUNNING {name} EXPERIMENTS -------------------")
     for i in range(num_repeat):
         try:
             os.remove(f"model_save_{name}_{i}.h5")
         except:
+            print("Could not remove file")
             pass
 
         print(f"RUN {i + 1}/{num_repeat}")
@@ -193,17 +252,38 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
             warnings.simplefilter("ignore")
             train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, nodes, TARGETS, excluded_subjects=noise, num_subjects=num_subjects, test_split=TEST_SPLIT, use_filter=True, use_marking=False, use_all_nodes=use_all_nodes)
 
-        print("LOADING REST DATA...")
+        # print("LOADING REST DATA...")
         # with warnings.catch_warnings():
         #     warnings.simplefilter("ignore")
         #     rest_train_x, rest_train_y, rest_test_x, rest_test_y = load_rest_data(nodes, excluded_subjects=noise, num_subjects=num_subjects, test_split=TEST_SPLIT, epochs=20, use_filter=True, use_all_nodes=use_all_nodes, num_targets=len(TARGETS) + 1)
 
-        # add rest data to train and test data
+        # #add rest data to train and test data
         # train_x = np.vstack((train_x, rest_train_x))
         # train_y = np.vstack((train_y, rest_train_y))
         # test_x = np.vstack((test_x, rest_test_x))
         # test_y = np.vstack((test_y, rest_test_y))
 
+        # scaler = TimeSeriesScalerMinMax()
+        # scaler.fit(np.vstack((train_x, test_x)))
+
+        # train_x = scaler.transform(train_x)
+        # test_x = scaler.transform(test_x)
+        #minmax scaler per channel
+        # for i, _ in enumerate(train_x.T):
+        #     scaler = MinMaxScaler()
+            
+        #     train_channel = train_x[:, :, i]
+        #     test_channel = test_x[:, :, i]
+
+        #     total_channel = np.vstack((train_channel, test_channel))
+
+        #     scaler.fit(total_channel)
+
+        #     train_x[:, :, i] = scaler.transform(train_channel)
+        #     test_x[:, :, i] = scaler.transform(test_channel)
+
+        # train_x = train_x.reshape((*train_x.shape, 1))
+        # test_x = test_x.reshape((*test_x.shape, 1))
 
         print("DONE LOADING DATA")
         # create a new model fo this run
@@ -213,14 +293,18 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
         model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
             filepath=f"model_save_{name}_{i}.h5",
             save_weights_only=False,
-            monitor='val_loss',
+            monitor='val_accuracy',
             mode='max',
             save_best_only=True)
 
-        model.fit(train_x, train_y, verbose=2, epochs=EPOCHS, shuffle=True, batch_size=64,callbacks=[model_checkpoint_callback], validation_data=(test_x, test_y))
-        model.save("model.h5")
+        model.fit(train_x, train_y, verbose=2, epochs=EPOCHS, shuffle=True, batch_size=32,callbacks=[model_checkpoint_callback], validation_data=(test_x, test_y))
 
-        model = load_model(f"model_save_{name}_{i}.h5")
+        mkdir_p(f"rest_vs_imagined_result_{SPEECH_TYPE}")
+        
+        generate_tsne_plot(model, f"rest_vs_imagined_result_{SPEECH_TYPE}", f"_{i}_train_result_{name}", train_x, train_y)
+
+        model = load_model(f"model_save_{name}_{i}.h5",custom_objects={"TCN": TCN})
+        generate_tsne_plot(model, f"rest_vs_imagined_result_{SPEECH_TYPE}", f"_{i}_test_result_{name}", test_x, test_y)
 
         test_loss, test_acc = model.evaluate(test_x, test_y)
 
@@ -230,8 +314,8 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
         total = 0
         right = 0
         wrong = 0
-        mkdir_p("rest_vs_imagined_result")
-        with open(f"rest_vs_imagined_result/result_{name}_{i}.txt", "w") as f:
+        
+        with open(f"rest_vs_imagined_result_{SPEECH_TYPE}/result_{name}_{i}.txt", "w") as f:
             for j, result in enumerate(results):
                     y_hat = np.argmax(result) 
                     y_real = np.argmax(test_y[j])
@@ -255,7 +339,7 @@ def run_experiment(name: str, nodes: list, epochs: int , num_subjects: int, num_
 
 if __name__ == "__main__":
 
-    EPOCHS = 150
+    EPOCHS = 100
     NUM_SUBJECTS = 20
     
     print("RUNNING REST vs COVERT EXPERIMENT SUITE")
@@ -264,7 +348,7 @@ if __name__ == "__main__":
     POSTER_NODES = ["F7", "F5", "FT7", "FC5", "FC3", "FC1", "T7", "C5", "C3", "Cz", "C4", "TP7", "CP5", "CP3", "P5", "P3"]
     IOANNIS_NODES = ["F3", "F4", "C3", "C4", "P3", "P4"]
 
-    N_REPEATS = 10
+    N_REPEATS = 5
 
     ALL_NODES_RESULT = run_experiment("ALL_NODES", [], epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=True)
     # IOANNIS_NODES_RESULT = run_experiment("IOANNIS_NODES", IOANNIS_NODES, epochs=EPOCHS, num_repeat=N_REPEATS, num_subjects=NUM_SUBJECTS, use_all_nodes=False)

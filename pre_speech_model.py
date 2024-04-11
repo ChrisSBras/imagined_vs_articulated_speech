@@ -230,8 +230,8 @@ if __name__ == "__main__":
     print(train_x_flat.shape, train_y_flat.shape)
 
     features = train_x.shape[-1]
-    model = generate_model(features=features, batch_size=BATCH_SIZE)
-    # model = generate_conv_model(features=features, batch_size=BATCH_SIZE)
+    # model = generate_model(features=features, batch_size=BATCH_SIZE)
+    model = generate_conv_model(features=features, batch_size=BATCH_SIZE)
     model.summary()
 
     model = load_model("prespeech_save_all_nodes_LSTM.h5")

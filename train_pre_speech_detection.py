@@ -10,18 +10,18 @@ import tensorflow as tf
 
 from keras.models import load_model
 
-from helpers.filtering import filter_data, rereference
+from helpers.filtering import filter_data, rereference, normalize_df
 from helpers.preprocessing import delete_speech
-from helpers.model import create_conv_model_regression
+from helpers.model import create_conv_model_regression, create_wavenet_model
 from helpers.vad import get_speech_marking_for_file, VAD_SAMPLING_RATE
 
 import os
 
 import random
 
-random.seed(42)
+random.seed(43)
 
-def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=False, use_all_nodes=True, use_marking=True):
+def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], excluded_subjects=[], num_subjects=20, epochs=20, test_split=0.2, use_filter=True, use_all_nodes=False, use_marking=True):
     xs = []
     ys = []
 
@@ -45,11 +45,7 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
             test_array = random.sample(range(epochs), round(test_split * epochs) )
 
             for epoch in range(epochs):
-                
-                # get audio data
-                if speech_type == "overt" and use_marking:
-                    audio_path = f"./data/sourcedata/{subject}/audio/{subject}_task-overt-{target}_run-{(epoch + 1):02d}_audio.wav"
-                    markings = get_speech_marking_for_file(audio_path)
+
 
                 epoch_df = df[df["epoch"] == epoch]
                
@@ -65,6 +61,16 @@ def load_data(speech_type: str, eeg_nodes: list[str], targets: list[str], exclud
       
                 if numpy_df.shape[0] != 2048:
                     continue # skip epochs that are not exactly right for now
+
+                        
+                if np.any(np.abs(numpy_df) > 40):
+                    continue
+                # numpy_df = normalize_df(numpy_df)
+           
+                # get audio data
+                if speech_type == "overt" and use_marking:
+                    audio_path = f"./data/sourcedata/{subject}/audio/{subject}_task-overt-{target}_run-{(epoch + 1):02d}_audio.wav"
+                    markings = get_speech_marking_for_file(audio_path)
 
                 if use_filter:
                     numpy_df = filter_data(numpy_df)
@@ -98,6 +104,14 @@ if __name__ == "__main__":
     except:
         pass
 
+    try:
+        import sys
+        channel_set = int(sys.argv[1])
+    except:
+        print("No channelset selected")
+        exit(1)
+    
+
     TARGETS = ["aa", "oo", "ee", "ie", "oe"]
     # TARGETS = ["aa", "oo", "ee"]
     # TARGETS = ["aa"]
@@ -106,51 +120,88 @@ if __name__ == "__main__":
     EEG_NODES_IOANNIS = ["F3", "F4", "C3", "C4", "P3", "P4"]
     SPEECH_TYPE = "overt"
 
-    N_REPEATS = 3
+    channel_sets = [EEG_NODES_IOANNIS, EEG_NODES, EEG_NODES2]
 
-    females = [1, 3, 4, 5, 6, 7, 8, 9, 10, 14, 16, 17, 18, 19]
+    N_REPEATS = 5
+    N_SUBJECTS = 20
+    EPOCHS = 150
+
     noise = [9, 13, 7, 17, 2]
 
     BASE_LINE_RESULTS = []
     TEST_RESULT = []
 
-    print("LOADING DATA...")
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, EEG_NODES2, TARGETS, excluded_subjects=noise, num_subjects=20, test_split=0.15, use_filter=True, use_marking=True)
+    RESULT_MSE = []
+    RESULT_MAE = []
 
-    print(train_y)
+    use_all_nodes = False
+    try:
+        channeL_set_to_use = channel_sets[channel_set]
+    except:
+        channeL_set_to_use = []
+        use_all_nodes = True
 
-    print("DONE LOADING DATA")
-    # create a new model fo this run
-    model = create_conv_model_regression(input_shape=(2048, train_x.shape[2]), num_y=train_y.shape[-1])
-    model.summary()
+    for run_id in range(N_REPEATS):
+        try:
+            os.remove("model_save_prespeech_detection.h5")
+        except:
+            pass
+        print("LOADING DATA...")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            train_x, train_y, test_x, test_y = load_data(SPEECH_TYPE, channeL_set_to_use, TARGETS, excluded_subjects=noise, num_subjects=N_SUBJECTS, test_split=0.2, use_filter=True, use_marking=True, use_all_nodes=use_all_nodes)
 
-    model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-        filepath=f"model_save_prespeech_detection.h5",
-        save_weights_only=False,
-        monitor='val_loss',
-        mode='min',
-        save_best_only=True)
+        print(train_y)
 
-    model.fit(train_x, train_y, verbose=2, epochs=150, shuffle=True, batch_size=16,callbacks=[model_checkpoint_callback], validation_data=(test_x, test_y))
-    model.save("model.h5")
+        print("DONE LOADING DATA")
+        # create a new model fo this run
+        model = create_conv_model_regression(input_shape=(2048, train_x.shape[2]), num_y=train_y.shape[-1])
+        model.summary()
 
-    model = load_model(f"model_save_prespeech_detection.h5")
+        model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath=f"model_save_prespeech_detection.h5",
+            save_weights_only=False,
+            monitor='val_loss',
+            mode='min',
+            save_best_only=True)
 
-    test_loss, test_acc = model.evaluate(test_x, test_y)
+        model.fit(train_x, train_y, verbose=2, epochs=EPOCHS, shuffle=True, batch_size=16,callbacks=[model_checkpoint_callback], validation_data=(test_x, test_y))
+        model.save("model.h5")
+        model.save(f"./prespeech_final_results/models/model_{channel_set}_run_{run_id}.h5")
 
-    print(test_loss, test_acc)
+        model = load_model(f"model_save_prespeech_detection.h5")
+        model.save(f"./prespeech_final_results/models/model_{channel_set}_run_{run_id}.h5")
 
-    results = model.predict(test_x)
+        loss, mse, mae = model.evaluate(test_x, test_y)
 
-    for i, y_hat in enumerate(results):
-        y_hat = int(y_hat * 2048)
-        real = int(test_y[i] * 2048)
+        RESULT_MSE.append(mse)
+        RESULT_MAE.append(mae)
 
-        plt.plot(test_x[i])
-        plt.axvline(x = real, color = 'b', label = 'Real')
-        plt.axvline(x = y_hat, color = 'r', label = 'Predicted')
+        print(loss, mse, mae)
 
-        plt.legend()
-        plt.show()
+        results = model.predict(test_x)
+
+        # for i, y_hat in enumerate(results):
+        #     y_hat = int(y_hat * 2048)
+        #     real = int(test_y[i] * 2048)
+
+        #     plt.plot(test_x[i])
+        #     plt.axvline(x = real, color = 'b', label = 'Real')
+        #     plt.axvline(x = y_hat, color = 'r', label = 'Predicted')
+
+        #     plt.legend()
+        #     plt.savefig(f"prespeech_vis/run{run_id}_result{i}")
+
+
+    with open(f"./prespeech_final_results/result_{channel_set}", "w") as f:
+        print("------------------------------------------------")
+        print()
+        print("Baseline MSE", RESULT_MSE , sum(RESULT_MSE) / len(RESULT_MSE))
+        print("Baseline MAE", RESULT_MAE , sum(RESULT_MAE) / len(RESULT_MAE))
+
+        for i in channeL_set_to_use:
+            f.write(f"{i}, ")
+        f.write("\n")
+        f.write(f"Baseline MAE, {RESULT_MAE}, {sum(RESULT_MAE) / len(RESULT_MAE)}\n")
+        f.write(f"Baseline MSE, {RESULT_MSE}, {sum(RESULT_MSE) / len(RESULT_MSE)}\n")
+        f.close()
